@@ -73,6 +73,12 @@ private:
     int counter;
     int lastTrigger;
     int maxBufLen;
+    float switchChance;
+    bool g1Active;
+    bool switching;
+    int prevDur;
+    int addedDur;
+    int addedDurMax;
     juce::dsp::LookupTable<float> hann;
     
     

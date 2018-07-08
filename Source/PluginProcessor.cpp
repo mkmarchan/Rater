@@ -33,12 +33,18 @@ RaterAudioProcessor::RaterAudioProcessor()
     grainDur = maxDur;
     counter = 0;
     lastTrigger = 0;
-    maxBufLen = ceil(std::max(abs(1 - minRate), abs(1 - maxRate))) * maxDur;
+    maxBufLen = ceil(std::max(abs(1 - minRate), abs(1 - maxRate))) * 441000;
     grainBuf.setSize(2, maxBufLen);
     grainBuf.clear();
+    switchChance = 0.1;
+    g1Active = true;
+    switching = true;
+    prevDur = 0;
+    addedDur = 0;
+    addedDurMax = 100;
     
     int grainLen = maxDur;
-    hann.initialise([grainLen](size_t i) {return (1.0 - cos(2 * M_PI * i / (grainLen - 1))) * 0.5;}, maxDur);
+    hann.initialise([grainLen](size_t i) {return (1.0 - cos(2 * M_PI * i / (grainLen - 1))) * 0.5;}, (maxDur + addedDurMax));
 }
 
 RaterAudioProcessor::~RaterAudioProcessor()
@@ -115,6 +121,9 @@ void RaterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     
     counter = 0;
     lastTrigger = 0;
+    g1Active = true;
+    switching = true;
+    prevDur = 0;
 }
 
 void RaterAudioProcessor::releaseResources()
@@ -172,7 +181,10 @@ void RaterAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
     
     int initCount = counter;
     int initTrigger = lastTrigger;
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    bool initG1Active = g1Active;
+    bool initSwitching = switching;
+    int initPrevDur = prevDur;
+    for (int channel = 0; channel < totalNumInputChannels && channel < 1; ++channel)
     {
         auto* inBuffer = buffer.getReadPointer(channel);
         auto* outBuffer = buffer.getWritePointer(channel);
@@ -180,27 +192,60 @@ void RaterAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
         
         counter = initCount;
         lastTrigger = initTrigger;
+        
+        // TODO: g1Active may not end up in same state for all channels at end
+        g1Active = initG1Active;
+        switching = initSwitching;
+        prevDur = initPrevDur;
         for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
-            if (counter % (grainDur / 2) == 0) {
-                lastTrigger = counter;
-            }
-            int samplesSinceTrigger = sampleWrap(counter - lastTrigger);
-            int rateOffset = rate > 1.0 ? (rate - 1.0) * grainDur : 0;
-            int g1Sample, g2Sample;
             
-            if (lastTrigger % grainDur == 0) {
+            // determine if it is time to switch grains
+            int samplesSinceTrigger = counter - lastTrigger;
+            if (!switching && samplesSinceTrigger >= addedDur + grainDur / 2) {
+                lastTrigger = counter;
+                prevDur = samplesSinceTrigger;
+                addedDur = (rand() / (float) RAND_MAX) * addedDurMax;
+                samplesSinceTrigger = 0;
+                switching = true;
+                g1Active = !g1Active;
+            }
+            
+            // determine if switching has concluded
+            if (switching && samplesSinceTrigger >= grainDur / 2) {
+                switching = false;
+            }
+            
+            int rateOffset = rate > 1.0 ? (rate - 1.0) * (grainDur + addedDur): 0;
+            int g1Sample, g2Sample;
+            float g1Hann, g2Hann;
+            
+            if (g1Active) {
                 g1Sample = lastTrigger + samplesSinceTrigger * rate - rateOffset;
-                g2Sample = lastTrigger + (samplesSinceTrigger + grainDur / 2) * rate - rateOffset - grainDur / 2;
+                g2Sample = lastTrigger + (samplesSinceTrigger + prevDur) * rate - rateOffset - prevDur;
+                if (switching) {
+                    g1Hann = samplesSinceTrigger / (float) grainDur * maxDur;
+                    g2Hann = (grainDur / 2 + samplesSinceTrigger) / (float) grainDur * maxDur;
+                } else {
+                    g1Hann = 0.5 * maxDur;
+                    g2Hann = 0;
+                }
             } else {
-                g1Sample = lastTrigger + (samplesSinceTrigger + grainDur / 2) * rate - rateOffset - grainDur / 2;
+                g1Sample = lastTrigger + (samplesSinceTrigger + prevDur) * rate - rateOffset - prevDur;
                 g2Sample = lastTrigger + samplesSinceTrigger * rate - rateOffset;
+                if (switching) {
+                    g1Hann = (grainDur / 2 + samplesSinceTrigger) / (float) grainDur * maxDur;
+                    g2Hann = samplesSinceTrigger / (float) grainDur * maxDur;
+                } else {
+                    g1Hann = 0;
+                    g2Hann = 0.5 * maxDur;
+                }
             }
             
             g1Sample = sampleWrap(g1Sample);
             g2Sample = sampleWrap(g2Sample);
             grainBuffer[counter % maxBufLen] = inBuffer[sample];
-            outBuffer[sample] = grainBuffer[g1Sample] * hann.getUnchecked((counter % grainDur) / (float)grainDur * maxDur)
-                + grainBuffer[g2Sample] * hann.getUnchecked(((counter + grainDur / 2) % grainDur) / (float)grainDur * maxDur);
+            outBuffer[sample] = grainBuffer[g1Sample] * hann.getUnchecked(g1Hann)
+                + grainBuffer[g2Sample] * hann.getUnchecked(g2Hann);
             
             // TODO: THIS WILL OVERFLOW AFTER 13 HOURS
             counter++;
