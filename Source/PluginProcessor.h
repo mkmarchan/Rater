@@ -55,9 +55,12 @@ public:
     void getStateInformation (MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
-    float rate = 1.0;
-    float minRate = 0.25;
-    float maxRate = 4.0;
+    float rate;
+    float minRate;
+    float maxRate;
+    int minDur;
+    int maxDur;
+    int grainDur;
     
 
 
@@ -67,7 +70,6 @@ private:
     int sampleWrap(int sample);
     
     AudioBuffer<float> grainBuf;
-    int grainDur;
     int counter;
     int lastTrigger;
     int maxBufLen;

@@ -24,14 +24,21 @@ RaterAudioProcessor::RaterAudioProcessor()
                        )
 #endif
 {
-    grainDur = 44100 / 50;
-    int grainLen = grainDur;
+    rate = 1.0;
+    minRate = 0.25;
+    maxRate = 4.0;
+    // TODO: Issue with odd length grain durations
+    minDur = 220;
+    maxDur = 44100;
+    grainDur = maxDur;
     counter = 0;
     lastTrigger = 0;
-    maxBufLen = ceil(std::max(abs(1 - minRate), abs(1 - maxRate))) * grainDur;
+    maxBufLen = ceil(std::max(abs(1 - minRate), abs(1 - maxRate))) * maxDur;
     grainBuf.setSize(2, maxBufLen);
     grainBuf.clear();
-    hann.initialise([grainLen](size_t i) {return (1.0 - cos(2 * M_PI * i / (grainLen - 1))) * 0.5;}, grainDur);
+    
+    int grainLen = maxDur;
+    hann.initialise([grainLen](size_t i) {return (1.0 - cos(2 * M_PI * i / (grainLen - 1))) * 0.5;}, maxDur);
 }
 
 RaterAudioProcessor::~RaterAudioProcessor()
@@ -105,6 +112,9 @@ void RaterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
+    
+    counter = 0;
+    lastTrigger = 0;
 }
 
 void RaterAudioProcessor::releaseResources()
@@ -188,10 +198,12 @@ void RaterAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
             
             g1Sample = sampleWrap(g1Sample);
             g2Sample = sampleWrap(g2Sample);
-            grainBuffer[counter] = inBuffer[sample];
-            outBuffer[sample] = grainBuffer[g1Sample] * hann[counter % grainDur]
-                + grainBuffer[g2Sample] * hann[(counter + grainDur / 2)% grainDur];
-            counter = (counter + 1) % maxBufLen;
+            grainBuffer[counter % maxBufLen] = inBuffer[sample];
+            outBuffer[sample] = grainBuffer[g1Sample] * hann.getUnchecked((counter % grainDur) / (float)grainDur * maxDur)
+                + grainBuffer[g2Sample] * hann.getUnchecked(((counter + grainDur / 2) % grainDur) / (float)grainDur * maxDur);
+            
+            // TODO: THIS WILL OVERFLOW AFTER 13 HOURS
+            counter++;
         }
     }
 }

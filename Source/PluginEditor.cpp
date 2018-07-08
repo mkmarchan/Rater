@@ -24,12 +24,24 @@ RaterAudioProcessorEditor::RaterAudioProcessorEditor (RaterAudioProcessor& p)
     rate.setTextBoxStyle (Slider::TextBoxBelow, false, getWidth() / 2, 40);
     rate.setPopupDisplayEnabled(false, false, this);
     rate.setTextValueSuffix (" Rate");
-    rate.setValue(1.0);
+    rate.setValue(p.rate);
     rate.setSkewFactorFromMidPoint(1.0);
     // this function adds the slider to the editor
     addAndMakeVisible (&rate);
     
     rate.addListener (this);
+    
+    grainDur.setSliderStyle (Slider::LinearBarVertical);
+    grainDur.setRange(p.minDur, p.maxDur, 2);
+    grainDur.setTextBoxStyle (Slider::TextBoxBelow, false, getWidth() / 2, 40);
+    grainDur.setPopupDisplayEnabled(false, false, this);
+    grainDur.setTextValueSuffix (" Grain Duration");
+    grainDur.setValue(p.grainDur);
+    grainDur.setSkewFactorFromMidPoint(p.maxDur / 2);
+    // this function adds the slider to the editor
+    addAndMakeVisible (&grainDur);
+    
+    grainDur.addListener (this);
 }
 
 RaterAudioProcessorEditor::~RaterAudioProcessorEditor()
@@ -52,10 +64,15 @@ void RaterAudioProcessorEditor::resized()
 {
     // This is generally where you'll want to lay out the positions of any
     // subcomponents in your editor..
-    rate.setBounds(getWidth() / 4, 30, getWidth() / 2, getHeight() - 60);
+    rate.setBounds(getWidth() / 4, 30, getWidth() / 4, getHeight() - 60);
+    grainDur.setBounds(getWidth() * 2/ 4, 30, getWidth() / 4, getHeight() - 60);
 }
 
 void RaterAudioProcessorEditor::sliderValueChanged (Slider* slider)
 {
-    processor.rate = slider->getValue();
+    if (slider == &rate) {
+        processor.rate = rate.getValue();
+    } else if (slider == &grainDur) {
+        processor.grainDur = grainDur.getValue();
+    }
 }
