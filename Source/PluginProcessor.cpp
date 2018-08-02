@@ -34,8 +34,7 @@ RaterAudioProcessor::RaterAudioProcessor()
     counter = 0;
     lastTrigger = 0;
     maxBufLen = ceil(std::max(abs(1 - minRate), abs(1 - maxRate))) * maxDur;
-    grainBuf.setSize(2, maxBufLen);
-    grainBuf.clear();
+    grainBuf = DelayBuffer(maxBufLen, 2);
     
     int grainLen = maxDur;
     hann.initialise([grainLen](size_t i) {return (1.0 - cos(2 * M_PI * i / (grainLen - 1))) * 0.5;}, maxDur);
@@ -121,7 +120,6 @@ void RaterAudioProcessor::releaseResources()
 {
     // When playback stops, you can use this as an opportunity to free up any
     // spare memory, etc.
-    grainBuf.clear();
 }
 
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -176,7 +174,6 @@ void RaterAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
     {
         auto* inBuffer = buffer.getReadPointer(channel);
         auto* outBuffer = buffer.getWritePointer(channel);
-        auto* grainBuffer = grainBuf.getWritePointer(channel);
         
         counter = initCount;
         lastTrigger = initTrigger;
@@ -189,18 +186,18 @@ void RaterAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
             int g1Sample, g2Sample;
             
             if (lastTrigger % grainDur == 0) {
-                g1Sample = lastTrigger + samplesSinceTrigger * rate - rateOffset;
-                g2Sample = lastTrigger + (samplesSinceTrigger + grainDur / 2) * rate - rateOffset - grainDur / 2;
+                g1Sample = sample - lastTrigger + samplesSinceTrigger * rate - rateOffset;
+                g2Sample = sample - lastTrigger + (samplesSinceTrigger + grainDur / 2) * rate - rateOffset - grainDur / 2;
             } else {
-                g1Sample = lastTrigger + (samplesSinceTrigger + grainDur / 2) * rate - rateOffset - grainDur / 2;
-                g2Sample = lastTrigger + samplesSinceTrigger * rate - rateOffset;
+                g1Sample = sample - lastTrigger + (samplesSinceTrigger + grainDur / 2) * rate - rateOffset - grainDur / 2;
+                g2Sample = sample - lastTrigger + samplesSinceTrigger * rate - rateOffset;
             }
             
-            g1Sample = sampleWrap(g1Sample);
-            g2Sample = sampleWrap(g2Sample);
-            grainBuffer[counter % maxBufLen] = inBuffer[sample];
-            outBuffer[sample] = grainBuffer[g1Sample] * hann.getUnchecked((counter % grainDur) / (float)grainDur * maxDur)
-                + grainBuffer[g2Sample] * hann.getUnchecked(((counter + grainDur / 2) % grainDur) / (float)grainDur * maxDur);
+            //g1Sample = sampleWrap(g1Sample);
+            // g2Sample = sampleWrap(g2Sample);
+            grainBuf.put(channel, inBuffer[sample]);
+            outBuffer[sample] = grainBuf.getOffset(channel, g1Sample) * hann.getUnchecked((counter % grainDur) / (float)grainDur * maxDur)
+                + grainBuf.getOffset(channel, g2Sample) * hann.getUnchecked(((counter + grainDur / 2) % grainDur) / (float)grainDur * maxDur);
             
             // TODO: THIS WILL OVERFLOW AFTER 13 HOURS
             counter++;
