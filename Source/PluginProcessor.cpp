@@ -186,11 +186,11 @@ void RaterAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
             int g1Sample, g2Sample;
             
             if (lastTrigger % grainDur == 0) {
-                g1Sample = sample - lastTrigger + samplesSinceTrigger * rate - rateOffset;
-                g2Sample = sample - lastTrigger + (samplesSinceTrigger + grainDur / 2) * rate - rateOffset - grainDur / 2;
+                g1Sample = samplesSinceTrigger * (1 - rate) + rateOffset;
+                g2Sample = (samplesSinceTrigger + grainDur / 2) * (1 - rate) + rateOffset;
             } else {
-                g1Sample = sample - lastTrigger + (samplesSinceTrigger + grainDur / 2) * rate - rateOffset - grainDur / 2;
-                g2Sample = sample - lastTrigger + samplesSinceTrigger * rate - rateOffset;
+                g1Sample = (samplesSinceTrigger + grainDur / 2) * (1 - rate) + rateOffset;
+                g2Sample = samplesSinceTrigger * (1 - rate) + rateOffset;
             }
             
             //g1Sample = sampleWrap(g1Sample);
@@ -198,7 +198,7 @@ void RaterAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
             grainBuf.put(channel, inBuffer[sample]);
             outBuffer[sample] = grainBuf.getOffset(channel, g1Sample) * hann.getUnchecked((counter % grainDur) / (float)grainDur * maxDur)
                 + grainBuf.getOffset(channel, g2Sample) * hann.getUnchecked(((counter + grainDur / 2) % grainDur) / (float)grainDur * maxDur);
-            
+            //outBuffer[sample] = grainBuf.getOffset(channel, -1 * maxBufLen);
             // TODO: THIS WILL OVERFLOW AFTER 13 HOURS
             counter++;
         }

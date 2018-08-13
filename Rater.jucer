@@ -3,6 +3,8 @@
 <JUCERPROJECT id="yN1k38" name="Rater" projectType="audioplug" jucerVersion="5.3.2">
   <MAINGROUP id="tPS8fy" name="Rater">
     <GROUP id="{0816EA59-2CEB-CA98-B380-13EE91E55654}" name="Source">
+      <FILE id="nJsNQL" name="DelayBuffer.cpp" compile="1" resource="0" file="Source/DelayBuffer.cpp"/>
+      <FILE id="QvgNKr" name="DelayBuffer.h" compile="0" resource="0" file="Source/DelayBuffer.h"/>
       <FILE id="N7thJv" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>
       <FILE id="rgBl83" name="PluginProcessor.h" compile="0" resource="0"

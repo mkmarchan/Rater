@@ -14,7 +14,7 @@ DelayBuffer::DelayBuffer (int maxBufLen, int numChannels)
     buffer.setSize(numChannels, maxBufLen);
     buffer.clear();
     for (int i = 0; i < numChannels; i++) {
-        channelCounters.push_back(0);
+        channelCounters.push_back(-1);
     }
 }
 
@@ -29,12 +29,17 @@ DelayBuffer::~DelayBuffer()
 //==============================================================================
 void DelayBuffer::put(int channel, float sample)
 {
-    buffer.setSample(channel, channelCounters[channel], sample);
     channelCounters[channel] = (channelCounters[channel] + 1) % maxBufLen;
+    buffer.setSample(channel, channelCounters[channel], sample);
 }
 
 float DelayBuffer::getOffset(int channel, float delay)
 {
+    // Error check
+    if (delay < 0) {
+        delay = 0;
+    }
+    
     // get buffer index
     float index = channelCounters[channel] - delay;
     while (index < 0) index += maxBufLen;
