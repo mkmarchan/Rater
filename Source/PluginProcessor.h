@@ -12,6 +12,8 @@
 
 #include "../JuceLibraryCode/JuceHeader.h"
 #include "DelayBuffer.h"
+#include "SyncGrain.h"
+#include "PitchTracker.h"
 
 //==============================================================================
 /**
@@ -62,6 +64,11 @@ public:
     int minDur;
     int maxDur;
     int grainDur;
+    float freq;
+    
+    juce::dsp::FFT fft;
+    
+    SyncGrain grain[2];
     
 
 
@@ -71,9 +78,11 @@ private:
     int sampleWrap(int sample);
     
     DelayBuffer grainBuf;
+    std::unique_ptr<PitchTracker> pTracker;
     int counter;
     int lastTrigger;
     int maxBufLen;
+    float fftData[4096];
     juce::dsp::LookupTable<float> hann;
     
     

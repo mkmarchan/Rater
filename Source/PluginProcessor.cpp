@@ -21,7 +21,7 @@ RaterAudioProcessor::RaterAudioProcessor()
                       #endif
                        .withOutput ("Output", AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ), fft(11)
 #endif
 {
     rate = 1.0;
@@ -114,6 +114,9 @@ void RaterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     
     counter = 0;
     lastTrigger = 0;
+    grain[0] = SyncGrain(getSampleRate(), 70.0, 35.0, 2.0);
+    grain[1] = SyncGrain(getSampleRate(), 70.0, 35.0, 2.0);
+    pTracker = std::unique_ptr<PitchTracker>(new PitchTracker(getSampleRate()));
 }
 
 void RaterAudioProcessor::releaseResources()
@@ -168,39 +171,48 @@ void RaterAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
     // Alternatively, you can process the samples with the channels
     // interleaved by keeping the same state.
     
-    int initCount = counter;
-    int initTrigger = lastTrigger;
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* inBuffer = buffer.getReadPointer(channel);
         auto* outBuffer = buffer.getWritePointer(channel);
         
-        counter = initCount;
-        lastTrigger = initTrigger;
+//        if (channel == 0) {
+//            zeromem(fftData, sizeof(fftData));
+//            memcpy(fftData, inBuffer, 2048);
+//            fft.performFrequencyOnlyForwardTransform(fftData);
+//            int max = 0;
+//            for (int i = 0; i < 2048; i++) {
+//                if (fftData[i] > fftData[max]) {
+//                    max = i;
+//                }
+//            }
+//
+//            if (max > 0 && max < sizeof(fftData) - 1) {
+//                int index;
+//                if (fftData[max - 1] > fftData[max + 1]) {
+//                    index = -1;
+//
+//                } else {
+//                    index = 1;
+//                }
+//                // todo: use bigger FFT
+//                float sum = fftData[max] + fftData[max + index];
+//                freq = freq * 0.6 + 0.3 * (max) * getSampleRate() / 2048.0;
+//            }
+//
+//            grain[0].setParams(freq, freq / 2, 0.8);
+//            grain[1].setParams(freq, freq / 2, 0.8);
+//        }
+        
         for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
-            if (counter % (grainDur / 2) == 0) {
-                lastTrigger = counter;
-            }
-            int samplesSinceTrigger = sampleWrap(counter - lastTrigger);
-            int rateOffset = rate > 1.0 ? (rate - 1.0) * grainDur : 0;
-            int g1Sample, g2Sample;
-            
-            if (lastTrigger % grainDur == 0) {
-                g1Sample = samplesSinceTrigger * (1 - rate) + rateOffset;
-                g2Sample = (samplesSinceTrigger + grainDur / 2) * (1 - rate) + rateOffset;
-            } else {
-                g1Sample = (samplesSinceTrigger + grainDur / 2) * (1 - rate) + rateOffset;
-                g2Sample = samplesSinceTrigger * (1 - rate) + rateOffset;
-            }
-            
-            //g1Sample = sampleWrap(g1Sample);
-            // g2Sample = sampleWrap(g2Sample);
-            grainBuf.put(channel, inBuffer[sample]);
-            outBuffer[sample] = grainBuf.getOffset(channel, g1Sample) * hann.getUnchecked((counter % grainDur) / (float)grainDur * maxDur)
-                + grainBuf.getOffset(channel, g2Sample) * hann.getUnchecked(((counter + grainDur / 2) % grainDur) / (float)grainDur * maxDur);
-            //outBuffer[sample] = grainBuf.getOffset(channel, -1 * maxBufLen);
-            // TODO: THIS WILL OVERFLOW AFTER 13 HOURS
-            counter++;
+            if (channel == 0) {
+                pTracker->put(inBuffer[sample]);
+                freq = 0.7 * freq + 0.3 * pTracker->get();
+                grain[0].setParams(freq, freq / 2.0, rate);
+                grain[1].setParams(freq, freq / 2.0, rate);
+             }
+            grain[channel].put(inBuffer[sample]);
+            outBuffer[sample] = grain[channel].get();
         }
     }
 }
